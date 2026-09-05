@@ -2,36 +2,336 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AquaLight Schedule</title>
-    <!-- Подключаем скрипт Telegram Mini App -->
+    <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body { margin: 0; background: #111; color: #fff; font-family: sans-serif; text-align: center; padding: 10px; }
-        canvas { background: #1a1a1a; border-radius: 12px; touch-action: none; width: 100%; max-width: 500px; }
-        button { width: 100%; max-width: 500px; padding: 14px; margin-top: 15px; background: #228be6; color: #fff; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; }
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-color: #ffffff;
+            --accent-color: #228be6;
+            --accent-hover: #1c7ed6;
+            --line-color: #4dabf7;
+            --grid-color: #333333;
+        }
+
+        /* Адаптация под тему Telegram (если включена) */
+        body.tg-theme {
+            --bg-color: var(--tg-theme-bg-color, #121212);
+            --card-bg: var(--tg-theme-secondary-bg-color, #1e1e1e);
+            --text-color: var(--tg-theme-text-color, #ffffff);
+            --accent-color: var(--tg-theme-button-color, #228be6);
+            --accent-hover: var(--tg-theme-button-color, #1c7ed6);
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        body {
+            margin: 0;
+            padding: 16px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .header {
+            text-align: center;
+        }
+
+        .header h2 {
+            margin: 0 0 4px 0;
+            font-size: 20px;
+        }
+
+        .header p {
+            margin: 0;
+            font-size: 13px;
+            opacity: 0.7;
+        }
+
+        .canvas-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        canvas {
+            width: 100%;
+            height: auto;
+            background: #000000;
+            border-radius: 8px;
+            touch-action: none;
+            cursor: pointer;
+        }
+
+        .info-panel {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-top: 10px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .save-btn {
+            width: 100%;
+            padding: 14px;
+            background-color: var(--accent-color);
+            color: #ffffff;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            box-shadow: 0 2px 8px rgba(34, 139, 230, 0.4);
+        }
+
+        .save-btn:active {
+            transform: scale(0.98);
+            background-color: var(--accent-hover);
+        }
     </style>
 </head>
-<body>
+<body class="tg-theme">
 
-    <h3>Настройка графика освещения</h3>
-    <canvas id="canvas" width="500" height="250"></canvas>
-    <button onclick="sendToBot()">Сохранить график</button>
+<div class="container">
+    <div class="header">
+        <h2>Суточный график освещения</h2>
+        <p>Перетаскивайте точки для изменения яркости</p>
+    </div>
 
-    <script>
-        const tg = window.Telegram.WebApp;
-        tg.expand(); // Разворачиваем WebApp на весь экран
+    <div class="canvas-card">
+        <canvas id="scheduleCanvas" width="500" height="260"></canvas>
+        <div class="info-panel">
+            <span id="selectedPointInfo">Точка: не выбрана</span>
+            <span id="totalPointsInfo">Всего точек: 0</span>
+        </div>
+    </div>
 
-        // Логика Canvas и точек
-        let scheduleData = { points: [{t:0, v:0}, {t:420, v:0}, {t:540, v:230}, {t:1140, v:230}, {t:1260, v:0}, {t:1440, v:0}] };
-        
-        // ... (Отрисовка и drag-and-drop логика холста) ...
+    <button class="save-btn" onclick="saveAndSend()">Сохранить график</button>
+</div>
 
-        function sendToBot() {
-            // Преобразуем данные в JSON-строку и отправляем напрямую в FastBot2
-            const jsonString = JSON.stringify(scheduleData);
-            tg.sendData(jsonString); // Метод закрывает Mini App и генерирует webAppData событие для FastBot2
+<script>
+    // Инициализация Telegram WebApp API
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+        tg.expand();
+        tg.ready();
+    }
+
+    const canvas = document.getElementById('scheduleCanvas');
+    const ctx = canvas.getContext('2d');
+    const infoText = document.getElementById('selectedPointInfo');
+    const totalText = document.getElementById('totalPointsInfo');
+
+    // График по умолчанию (структура для GSON/FastBot2)
+    let scheduleData = {
+        white: [
+            { t: 0,    v: 0 },
+            { t: 420,  v: 0 },
+            { t: 540,  v: 230 },
+            { t: 1140, v: 230 },
+            { t: 1260, v: 0 },
+            { t: 1440, v: 0 }
+        ]
+    };
+
+    const PADDING = { top: 20, right: 20, bottom: 30, left: 35 };
+    let draggedIndex = null;
+
+    // Конвертация координат
+    function t2x(t) {
+        const drawWidth = canvas.width - PADDING.left - PADDING.right;
+        return PADDING.left + (t / 1440) * drawWidth;
+    }
+
+    function x2t(x) {
+        const drawWidth = canvas.width - PADDING.left - PADDING.right;
+        let t = Math.round(((x - PADDING.left) / drawWidth) * 1440);
+        return Math.max(0, Math.min(1440, t));
+    }
+
+    function v2y(v) {
+        const drawHeight = canvas.height - PADDING.top - PADDING.bottom;
+        return (canvas.height - PADDING.bottom) - (v / 255) * drawHeight;
+    }
+
+    function y2v(y) {
+        const drawHeight = canvas.height - PADDING.top - PADDING.bottom;
+        let v = Math.round(((canvas.height - PADDING.bottom - y) / drawHeight) * 255);
+        return Math.max(0, Math.min(255, v));
+    }
+
+    function formatTime(minutes) {
+        let h = Math.floor(minutes / 60);
+        let m = minutes % 60;
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+
+    // Отрисовка холста
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const points = scheduleData.white;
+
+        // Сетка и подписи осей
+        ctx.strokeStyle = '#282828';
+        ctx.fillStyle = '#777777';
+        ctx.font = '10px sans-serif';
+        ctx.lineWidth = 1;
+
+        // Временные метки (каждые 4 часа)
+        for (let h = 0; h <= 24; h += 4) {
+            let x = t2x(h * 60);
+            ctx.beginPath();
+            ctx.moveTo(x, PADDING.top);
+            ctx.lineTo(x, canvas.height - PADDING.bottom);
+            ctx.stroke();
+            ctx.fillText(`${h}:00`, x - 10, canvas.height - 10);
         }
-    </script>
+
+        // Уровни яркости (0%, 50%, 100%)
+        [0, 128, 255].forEach(v => {
+            let y = v2y(v);
+            ctx.beginPath();
+            ctx.moveTo(PADDING.left, y);
+            ctx.lineTo(canvas.width - PADDING.right, y);
+            ctx.stroke();
+            let percent = Math.round((v / 255) * 100);
+            ctx.fillText(`${percent}%`, 5, y + 3);
+        });
+
+        // Заливка под графиком
+        ctx.beginPath();
+        ctx.moveTo(t2x(points[0].t), v2y(0));
+        points.forEach(p => ctx.lineTo(t2x(p.t), v2y(p.v)));
+        ctx.lineTo(t2x(points[points.length - 1].t), v2y(0));
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(34, 139, 230, 0.15)';
+        ctx.fill();
+
+        // Отрисовка основной линии
+        ctx.beginPath();
+        ctx.strokeStyle = '#4dabf7';
+        ctx.lineWidth = 3;
+        points.forEach((p, i) => {
+            let x = t2x(p.t), y = v2y(p.v);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // Отрисовка точек
+        points.forEach((p, i) => {
+            let x = t2x(p.t), y = v2y(p.v);
+            ctx.beginPath();
+            ctx.arc(x, y, 7, 0, Math.PI * 2);
+            ctx.fillStyle = (draggedIndex === i) ? '#ff922b' : '#228be6';
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        });
+
+        totalText.innerText = `Всего точек: ${points.length}`;
+    }
+
+    // Получение координат нажатия
+    function getCanvasCoords(e) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return {
+            x: (clientX - rect.left) * (canvas.width / rect.width),
+            y: (clientY - rect.top) * (canvas.height / rect.height)
+        };
+    }
+
+    // Обработка клика/касания
+    canvas.addEventListener('pointerdown', (e) => {
+        const { x, y } = getCanvasCoords(e);
+        const points = scheduleData.white;
+
+        // Поиск точки рядом с кликом (радиус захвата 15px)
+        draggedIndex = points.findIndex(p => Math.hypot(t2x(p.t) - x, v2y(p.v) - y) < 15);
+
+        if (draggedIndex !== -1) {
+            updateInfoText(points[draggedIndex]);
+            draw();
+        }
+    });
+
+    // Перемещение
+    canvas.addEventListener('pointermove', (e) => {
+        if (draggedIndex === null) return;
+        const { x, y } = getCanvasCoords(e);
+        const points = scheduleData.white;
+
+        // Изменение яркости (Y)
+        points[draggedIndex].v = y2v(y);
+
+        // Изменение времени (X) с ограничениями от соседних точек
+        if (draggedIndex > 0 && draggedIndex < points.length - 1) {
+            let minT = points[draggedIndex - 1].t + 5;
+            let maxT = points[draggedIndex + 1].t - 5;
+            let newT = x2t(x);
+            points[draggedIndex].t = Math.max(minT, Math.min(maxT, newT));
+        }
+
+        updateInfoText(points[draggedIndex]);
+        draw();
+    });
+
+    // Отпуск нажатия
+    window.addEventListener('pointerup', () => {
+        draggedIndex = null;
+        draw();
+    });
+
+    function updateInfoText(point) {
+        if (!point) return;
+        let percent = Math.round((point.v / 255) * 100);
+        infoText.innerText = `Время: ${formatTime(point.t)} | Яркость: ${percent}%`;
+    }
+
+    // Отправка JSON в FastBot2 через Telegram WebApp SDK
+    function saveAndSend() {
+        const jsonString = JSON.stringify(scheduleData);
+
+        if (tg && tg.sendData) {
+            tg.sendData(jsonString); // Метод закрывает Mini App и отправляет строку в FastBot2
+        } else {
+            alert("Запущено вне Telegram. Сформированный JSON:\n" + jsonString);
+            console.log(jsonString);
+        }
+    }
+
+    // Первичная отрисовка
+    draw();
+</script>
+
 </body>
 </html>
