@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AquaLight Schedule</title>
+    <!-- Подключаем скрипт Telegram Mini App -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { margin: 0; background: #111; color: #fff; font-family: sans-serif; text-align: center; padding: 10px; }
+        canvas { background: #1a1a1a; border-radius: 12px; touch-action: none; width: 100%; max-width: 500px; }
+        button { width: 100%; max-width: 500px; padding: 14px; margin-top: 15px; background: #228be6; color: #fff; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; }
+    </style>
+</head>
+<body>
+
+    <h3>Настройка графика освещения</h3>
+    <canvas id="canvas" width="500" height="250"></canvas>
+    <button onclick="sendToBot()">Сохранить график</button>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand(); // Разворачиваем WebApp на весь экран
+
+        // Логика Canvas и точек
+        let scheduleData = { points: [{t:0, v:0}, {t:420, v:0}, {t:540, v:230}, {t:1140, v:230}, {t:1260, v:0}, {t:1440, v:0}] };
+        
+        // ... (Отрисовка и drag-and-drop логика холста) ...
+
+        function sendToBot() {
+            // Преобразуем данные в JSON-строку и отправляем напрямую в FastBot2
+            const jsonString = JSON.stringify(scheduleData);
+            tg.sendData(jsonString); // Метод закрывает Mini App и генерирует webAppData событие для FastBot2
+        }
+    </script>
+</body>
+</html>
